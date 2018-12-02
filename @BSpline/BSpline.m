@@ -37,6 +37,10 @@ classdef BSpline < handle
             end
         end
         
+        function [xe, ye] = evaluateDeriv(instance, numEvalPts)
+            % TODO
+        end
+        
         function leastSquaresFit(instance, xd, zd)
             instance.cVector = LeastSquaresSpline(instance.degree, ...
                 instance.dimension, instance.extendedKnotVector, xd, zd);
