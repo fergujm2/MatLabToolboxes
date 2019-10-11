@@ -1,4 +1,6 @@
 function HCG = CalibrateHandEye(HGi, HCi)
+% Algorithm is based on "A New Technique for Fully Autonomous and Efficient 
+% 3D Robotics Hand/Eye Calibration" by Tsai and Lenz
 
 numStations = size(HGi, 3);
 
