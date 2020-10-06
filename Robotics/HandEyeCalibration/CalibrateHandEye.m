@@ -6,46 +6,50 @@ numStations = size(HGi, 3);
 
 % Preprocess
 stations = 1:numStations;
-
 stationPairs = nchoosek(stations, 2);
 
-numPairs = size(stationPairs, 1);
+numPairsTotal = size(stationPairs, 1);
+numPairsChosen = ceil(numPairsTotal/1);
 
-pGij = zeros(3, numPairs);
-tGij = zeros(3, numPairs);
-RGij = zeros(3, 3, numPairs);
+% We want to choose the numPairsChosen station pairs that have the highest
+% rotation angle between them. We'll loop through all of them to decide.
+angles = zeros(1, numPairsTotal);
 
-pCij = zeros(3, numPairs);
-tCij = zeros(3, numPairs);
+pGij = zeros(3, numPairsTotal);
+tGij = zeros(3, numPairsTotal);
 
-for iii = 1:numPairs
+pCij = zeros(3, numPairsTotal);
+tCij = zeros(3, numPairsTotal);
+
+for iii = 1:numPairsTotal
     pair = stationPairs(iii,:);
     
     HGij = (HGi(:,:,pair(2))) \ HGi(:,:,pair(1));
     HCij = (HCi(:,:,pair(2))) / HCi(:,:,pair(1));
     
+    axang = tform2axang(HGij);
+    angles(iii) = axang(4);
+    
     tGij(:,iii) = tform2trvec(HGij);
     tCij(:,iii) = tform2trvec(HCij);
-    RGij(:,:,iii) = tform2rotm(HGij);
-    
-    axang = rotm2axang(tform2rotm(HGij));
-    ax = axang(1:3);
-    ang = axang(4);
-    pGij(:,iii) = ang*ax/norm(ax);
-    
-    axang = rotm2axang(tform2rotm(HCij));
-    ax = axang(1:3);
-    ang = axang(4);
-    pCij(:,iii) = ang*ax/norm(ax);
+    pGij(:,iii) = rotm2p(tform2rotm(HGij));
+    pCij(:,iii) = rotm2p(tform2rotm(HCij));
 end
 
-% Solve Step 1
+% Now sort the data from biggest rotation Rij to smallest
+[~, indSorted] = sort(angles, 'descend');
 
-A = zeros(3*numPairs, 3);
-b = zeros(3*numPairs, 1);
+pGij = pGij(:,indSorted);
+tGij = tGij(:,indSorted);
+pCij = pCij(:,indSorted);
+tCij = tCij(:,indSorted);
+
+% Solve Step 1 using only the first numPairsChosen pairs
+A = zeros(3*numPairsChosen, 3);
+b = zeros(3*numPairsChosen, 1);
 
 % Fill in A and b
-for iii = 1:numPairs
+for iii = 1:numPairsChosen
     APart = skew(pGij(:,iii) + pCij(:,iii));
     bPart = pCij(:,iii) - pGij(:,iii);
     
@@ -61,18 +65,17 @@ pCGPrime = A \ b;
 % Solve Step 3
 
 pCG = 2*pCGPrime/sqrt(1 + norm(pCGPrime)^2);
+RCG = p2rotm(pCG);
 
-alpha = sqrt(4 - 0.5*norm(pCG)^2);
-RCG = (1 - 0.5*norm(pCG)^2)*eye(3) + 0.5*(pCG*(pCG') + alpha*skew(pCG));
+% Solve Step 4 using only the first numPairsChosen pairs
 
-% Solve Step 4
-
-A = zeros(3*numPairs, 3);
-b = zeros(3*numPairs, 1);
+A = zeros(3*numPairsChosen, 3);
+b = zeros(3*numPairsChosen, 1);
 
 % Fill in A and b
-for iii = 1:numPairs
-    APart = RGij(:,:,iii) - eye(3);
+for iii = 1:numPairsChosen
+    RGij = p2rotm(pGij(:,iii));
+    APart = RGij - eye(3);
     bPart = RCG*tCij(:,iii) - tGij(:,iii);
     
     indexLo = 3*(iii - 1) + 1;
@@ -92,4 +95,20 @@ end
 
 function wHat = skew(w)
     wHat = [0, -w(3), w(2); w(3), 0, -w(1); -w(2), w(1), 0];
+end
+
+function p = rotm2p(R)
+    % Now, this is important, in the paper, they do not define the 3D
+    % rotation vector normally. Instead, they do it this way:
+    axang = rotm2axang(R);
+    ax = axang(1:3);
+    ang = axang(4);
+    
+    p = 2*sin(ang/2)*ax/norm(ax);
+end
+
+function R = p2rotm(p)
+    % The following should hold for the above vector:
+    alph = sqrt(4 - norm(p)^2);
+    R = (1 - 1/2*norm(p)^2)*eye(3) + 1/2*(p*(p') + alph*skew(p));
 end
