@@ -5,6 +5,8 @@
 % Evolution of state vector: x_k = F*x_km1 + G*a_k, a_k is random accel.
 % This is the same as: x_k = F*x_km1 + w_k, w_k ~ N(0, Q); Q = G*(G')*sig_a
 
+T = 0.01;
+
 F = [1, T; 0, 1];
 G = [1/2*T^2; T];
 
